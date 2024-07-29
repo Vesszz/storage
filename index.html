@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{.Title}}</title>
+    <script>
+        window.onload = function() {
+            fetch('/list')
+                .then(response => response.json())
+                .then(data => {
+                    const listContainer = document.getElementById('file-list');
+                    data.filenames.forEach(filename => {
+                        const link = document.createElement('a');
+                        link.href = `/download/${filename}`;
+                        link.textContent = filename;
+                        link.download = filename;
+                        listContainer.appendChild(link);
+                        const br = document.createElement('br');
+                        listContainer.appendChild(br);
+                    });
+                })
+                .catch(error => console.error('Error fetching file list:', error));
+        };
+    </script>
+</head>
+<body>
+
+<div id="file-list"></div>
+
+<div id="upload">
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" />
+        <input type="submit" value="Upload" />
+    </form>
+</div>
+
+</body>
+</html>
