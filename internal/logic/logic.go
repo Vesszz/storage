@@ -3,19 +3,30 @@ package logic
 import (
 	"fmt"
 	"io"
+	"main/internal/config"
 	"main/internal/loader"
+	"main/internal/models"
+	"main/pkg/secutils"
 	"mime/multipart"
 	"net/http"
 )
 
+const saltLength = 8
+
 type Logic struct {
 	loader *loader.Loader
+	config *config.Config
 }
 
-func New(l *loader.Loader) *Logic {
+func New(c *config.Config) (*Logic, error) {
+	l, err := loader.New(&c.Database, &c.FileStorage)
+	if err != nil {
+		return nil, fmt.Errorf("loader initialisation: %w", err)
+	}
 	return &Logic{
 		loader: l,
-	}
+		config: c,
+	}, nil
 }
 
 func (l *Logic) Index() (loader.PageData, error) {
@@ -55,4 +66,21 @@ func (l *Logic) FileList() (*loader.FileList, error) {
 		return nil, fmt.Errorf("getting all files %w", err)
 	}
 	return files, nil
+}
+
+func (l *Logic) Register(name string, password string) error {
+
+	hashedPassword, err := secutils.HashPassword(password, saltLength)
+	if err != nil {
+		return fmt.Errorf("hashing password: %w", err)
+	}
+	err = l.loader.CreateUser(models.User{
+		Name:     name,
+		Password: hashedPassword.Value,
+		Salt:     hashedPassword.Salt,
+	})
+	if err != nil {
+		return fmt.Errorf("registration on db side: %w", err)
+	}
+	return nil
 }

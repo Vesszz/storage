@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"main/internal/logic"
 	"net/http"
@@ -34,6 +35,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +53,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusFound)
+	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusOK)
 }
 
 func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +63,7 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Sending error", http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) FileList(w http.ResponseWriter, r *http.Request) {
@@ -73,4 +76,21 @@ func (h *Handler) FileList(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Encoding json", http.StatusInternalServerError)
 	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) Registration(w http.ResponseWriter, r *http.Request) {
+	var regReq RegistrationRequest
+	err := json.NewDecoder(r.Body).Decode(&regReq)
+	if err != nil {
+		http.Error(w, "Decoding json", http.StatusBadRequest)
+		return
+	}
+	err = h.logic.Register(regReq.Name, regReq.Password)
+	if err != nil {
+		http.Error(w, "Managing registration", http.StatusInternalServerError)
+		fmt.Println(err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

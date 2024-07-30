@@ -2,18 +2,33 @@ package loader
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
+	"main/internal/config"
+	"main/internal/models"
 	"mime/multipart"
 	"os"
+
+	_ "github.com/lib/pq"
 )
 
 type Loader struct {
+	dbCfg *config.DatabaseConfig
+	flCfg *config.FileStorageConfig
+	db    *sql.DB
 }
 
-func New() *Loader {
-	return &Loader{}
+func New(dbCfg *config.DatabaseConfig, fsCfg *config.FileStorageConfig) (*Loader, error) {
+	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%d sslmode=%s", dbCfg.User, dbCfg.Password, dbCfg.DBName, dbCfg.Host, dbCfg.Port, dbCfg.SSLMode)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("opening db connection: %w", err)
+	}
+	return &Loader{
+		dbCfg: dbCfg,
+		flCfg: fsCfg,
+		db:    db,
+	}, nil
 }
 
 type FileList struct {
@@ -25,22 +40,11 @@ type PageData struct {
 	FilesNames FileList
 }
 
-type Config struct {
-	Database struct {
-		Host     string `json:"host"`
-		Port     int    `json:"port"`
-		User     string `json:"user"`
-		Password string `json:"password"`
-		DBName   string `json:"dbname"`
-		SSLMode  string `json:"sslmode"`
-	} `json:"database"`
-}
-
-func createFile(filename string) (*os.File, error) {
+func (l *Loader) createFile(filename string) (*os.File, error) {
 	//ext := filepath.Ext(filename)
 	//photosExt := [7]string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"}
 	//fileDirector := ""
-	return os.Create("./uploads/" + filename)
+	return os.Create(l.flCfg.Path + filename)
 }
 
 func (l *Loader) Get(path string) (multipart.File, error) {
@@ -52,7 +56,7 @@ func (l *Loader) Get(path string) (multipart.File, error) {
 }
 
 func (l *Loader) GetAll() (*FileList, error) {
-	files, err := os.ReadDir("./uploads")
+	files, err := os.ReadDir(l.flCfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("reading uploads dir: %w", err)
 	}
@@ -70,7 +74,7 @@ func (l *Loader) GetAll() (*FileList, error) {
 }
 
 func (l *Loader) Load(fileName string, file multipart.File) error {
-	out, err := createFile(fileName)
+	out, err := l.createFile(fileName)
 	if err != nil {
 		return fmt.Errorf("creating file: %w", err)
 	}
@@ -96,20 +100,10 @@ func (l *Loader) IndexInfo() (PageData, error) {
 	return data, nil
 }
 
-func (l *Loader) DBstart() error {
-	file, err := os.ReadFile("./configs/config.json")
+func (l *Loader) CreateUser(user models.User) error {
+	_, err := l.db.Exec("INSERT INTO users(name, password, salt) VALUES ($1, $2, $3)", user.Name, user.Password, user.Salt)
 	if err != nil {
-		fmt.Println(err)
-		return err
+		return fmt.Errorf("inserting user: %w", err)
 	}
-	var config Config
-	err = json.Unmarshal(file, &config)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-	dbcfg := config.Database
-	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=%s", dbcfg.User, dbcfg.Password, dbcfg.DBName, dbcfg.Host, dbcfg.Port, dbcfg.SSLMode)
-	db, err := sql.Open("postgres", connStr)
 	return nil
 }

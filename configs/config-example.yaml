@@ -1,0 +1,13 @@
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: password
+  dbname: postgres
+  sslmode: disable
+
+file_storage:
+  path: "./uploads/"
+
+server:
+  port: 8080
