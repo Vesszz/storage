@@ -28,6 +28,14 @@ func HashPassword(password string, saltLength int) (HashedPassword, error) {
 	}, nil
 }
 
+func HashPasswordBySalt(password string, salt string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword(append([]byte(password), salt...), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedPassword), nil
+}
+
 func generateSalt(length int) []byte {
 	salt := make([]byte, length)
 	for j := 0; j < length; j++ {

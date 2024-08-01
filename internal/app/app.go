@@ -22,7 +22,8 @@ func Run() error {
 	http.HandleFunc("/upload", h.Upload)
 	http.HandleFunc("/download/", h.Download)
 	http.HandleFunc("/list", h.FileList)
-	http.HandleFunc("/singup", h.Registration)
+	http.HandleFunc("/signup", h.SignUp)
+	http.HandleFunc("/signin", h.SignIn)
 	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.Server.Port), nil)
 	if err != nil {
 		return fmt.Errorf("listening and serving: %w", err)

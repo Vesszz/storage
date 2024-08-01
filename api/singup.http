@@ -2,6 +2,6 @@ POST {{url}}/singup
 Content-Type: application/json
 
 {
-  "name": "tigr2281337",
+  "name": "tigran",
   "password": "qwerty12345"
 }

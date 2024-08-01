@@ -4,28 +4,36 @@ import (
 	"fmt"
 	"io"
 	"main/internal/config"
+	"main/internal/errs"
 	"main/internal/loader"
 	"main/internal/models"
 	"main/pkg/secutils"
 	"mime/multipart"
 	"net/http"
+	"os"
 )
 
 const saltLength = 8
 
 type Logic struct {
-	loader *loader.Loader
-	config *config.Config
+	loader         *loader.Loader
+	config         *config.Config
+	secretTokenKey string
 }
 
 func New(c *config.Config) (*Logic, error) {
+	secretTokenKey, ok := os.LookupEnv("SECRET_TOKEN_KEY")
+	if !ok {
+		return nil, fmt.Errorf("loading env")
+	}
 	l, err := loader.New(&c.Database, &c.FileStorage)
 	if err != nil {
 		return nil, fmt.Errorf("loader initialisation: %w", err)
 	}
 	return &Logic{
-		loader: l,
-		config: c,
+		loader:         l,
+		config:         c,
+		secretTokenKey: secretTokenKey,
 	}, nil
 }
 
@@ -68,19 +76,51 @@ func (l *Logic) FileList() (*loader.FileList, error) {
 	return files, nil
 }
 
-func (l *Logic) Register(name string, password string) error {
+func (l *Logic) Register(name string, password string, fingerprint string) (*UserTokens, error) {
+	user, err := l.loader.FindUser(name)
+	if err != nil {
+		return nil, fmt.Errorf("finding user: %w", err)
+	}
+	if user != nil {
+		return nil, errs.UserAlreadyExists
+	}
 
 	hashedPassword, err := secutils.HashPassword(password, saltLength)
 	if err != nil {
-		return fmt.Errorf("hashing password: %w", err)
+		return nil, fmt.Errorf("hashing password: %w", err)
 	}
-	err = l.loader.CreateUser(models.User{
+	user, err = l.loader.CreateUser(models.User{
 		Name:     name,
 		Password: hashedPassword.Value,
 		Salt:     hashedPassword.Salt,
 	})
 	if err != nil {
-		return fmt.Errorf("registration on db side: %w", err)
+		return nil, fmt.Errorf("registration on db side: %w", err)
 	}
-	return nil
+
+	userTokens, err := l.CreateTokens(user, fingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("creating tokens: %w", err)
+	}
+	return userTokens, nil
+}
+
+func (l *Logic) Login(name string, password string) (*UserTokens, error) {
+	user, err := l.loader.FindUser(name)
+	if err != nil {
+		return nil, fmt.Errorf("finding user: %w", err)
+	}
+	if user == nil {
+		return nil, errs.UserNotExists
+	}
+	hashedPassword, err := secutils.HashPasswordBySalt(password, user.Salt)
+	if err != nil {
+		return nil, fmt.Errorf("hashing while logging: %w", err)
+	}
+	if user.Password != hashedPassword {
+		return nil, errs.WrongPassword
+	}
+
+	//TODO return token
+	return nil, nil
 }

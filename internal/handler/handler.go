@@ -2,8 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
+	"log/slog"
+	"main/internal/errs"
 	"main/internal/logic"
 	"net/http"
 )
@@ -79,18 +82,56 @@ func (h *Handler) FileList(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *Handler) Registration(w http.ResponseWriter, r *http.Request) {
-	var regReq RegistrationRequest
-	err := json.NewDecoder(r.Body).Decode(&regReq)
+func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
+	var singUpReq SignUpRequest
+	err := json.NewDecoder(r.Body).Decode(&singUpReq)
+	if err != nil {
+		slog.Error(fmt.Errorf("decoding json: %w", err).Error())
+		http.Error(w, "Decoding json", http.StatusBadRequest)
+		return
+	}
+
+	tokens, err := h.logic.Register(singUpReq.Name, singUpReq.Password, singUpReq.Fingerprint)
+	if err != nil {
+		if errors.Is(err, errs.UserAlreadyExists) {
+			http.Error(w, "This name is taken", http.StatusBadRequest)
+			return
+		}
+		slog.Error(fmt.Errorf("managing reg: %w", err).Error())
+		http.Error(w, "Managing registration", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    tokens.RefreshToken.String(),
+		HttpOnly: true,
+		Path:     "/",
+		//Secure:   true,
+		SameSite: http.SameSiteNoneMode,
+	})
+
+	response := SingUpResponse{AccessToken: tokens.AccessToken}
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		slog.Error(fmt.Errorf("encoding json response: %w", err).Error())
+		http.Error(w, "Encoding response", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) SignIn(w http.ResponseWriter, r *http.Request) {
+	var singInReq SignInRequest
+	err := json.NewDecoder(r.Body).Decode(&singInReq)
 	if err != nil {
 		http.Error(w, "Decoding json", http.StatusBadRequest)
 		return
 	}
-	err = h.logic.Register(regReq.Name, regReq.Password)
-	if err != nil {
-		http.Error(w, "Managing registration", http.StatusInternalServerError)
-		fmt.Println(err.Error())
-		return
-	}
-	w.WriteHeader(http.StatusOK)
+	//TODO get token
+	//tokens, err := h.logic.Login(singInReq.Name, singInReq.Password)
+
+	return
 }
