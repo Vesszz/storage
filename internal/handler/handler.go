@@ -9,6 +9,7 @@ import (
 	"main/internal/errs"
 	"main/internal/logic"
 	"net/http"
+	"strings"
 )
 
 type Handler struct {
@@ -50,9 +51,16 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.logic.Upload(header.Filename, file)
+	atc, err := h.decodeHeaderIntoAccessTokenClaims(r)
+	if err != nil {
+		slog.Error("failed read access token: %w", err)
+		http.Error(w, "Failed read access token", http.StatusBadRequest)
+		return
+	}
+	err = h.logic.Upload(header.Filename, file, atc)
 	if err != nil {
 		//http.Redirect(w, r, r.Header.Get("Referer"), http.StatusFound)
+		slog.Error("failed to upload file: %w", err)
 		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
 	}
@@ -102,24 +110,14 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    tokens.RefreshToken.String(),
-		HttpOnly: true,
-		Path:     "/",
-		//Secure:   true,
-		SameSite: http.SameSiteNoneMode,
-	})
-
-	response := SingUpResponse{AccessToken: tokens.AccessToken}
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
+	setRefreshTokenToCookie(w, tokens.RefreshToken.String())
+	response := SignUpResponse{AccessToken: tokens.AccessToken}
+	err = encodeResponse(w, response)
 	if err != nil {
-		slog.Error(fmt.Errorf("encoding json response: %w", err).Error())
+		slog.Error("encoding response: %w", err)
 		http.Error(w, "Encoding response", http.StatusInternalServerError)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -130,8 +128,110 @@ func (h *Handler) SignIn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Decoding json", http.StatusBadRequest)
 		return
 	}
-	//TODO get token
-	//tokens, err := h.logic.Login(singInReq.Name, singInReq.Password)
 
-	return
+	tokens, err := h.logic.Login(singInReq.Name, singInReq.Password, singInReq.Fingerprint)
+	if err != nil {
+		if errors.Is(err, errs.WrongPassword) {
+			http.Error(w, "Wrong password", http.StatusBadRequest)
+			return
+		}
+		slog.Error(fmt.Errorf("login: %w", err).Error())
+		http.Error(w, "Signing in", http.StatusInternalServerError)
+		return
+	}
+
+	setRefreshTokenToCookie(w, tokens.RefreshToken.String())
+	response := SignInResponse{AccessToken: tokens.AccessToken}
+	err = encodeResponse(w, response)
+	if err != nil {
+		slog.Error("encoding response: %w", err)
+		http.Error(w, "Encoding response", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) RefreshTokens(w http.ResponseWriter, r *http.Request) {
+	var refreshReq RefreshRequest
+	err := json.NewDecoder(r.Body).Decode(&refreshReq)
+	if err != nil {
+		http.Error(w, "Decoding json", http.StatusBadRequest)
+		return
+	}
+	refreshToken, err := getRefreshTokenFromRequest(r)
+	if err != nil {
+		if errors.Is(err, errs.RefreshTokenNotFound) {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		slog.Error("Get Refresh token from request: %w", err)
+		http.Error(w, "Get Refresh token from request", http.StatusInternalServerError)
+		return
+	}
+	tokens, err := h.logic.Refresh(refreshToken, refreshReq.Fingerprint)
+	if err != nil {
+		//todo
+		http.Error(w, "Refreshing tokens", http.StatusInternalServerError)
+		return
+	}
+	setRefreshTokenToCookie(w, tokens.RefreshToken.String())
+	response := RefreshResponse{AccessToken: tokens.AccessToken}
+	err = encodeResponse(w, response)
+	if err != nil {
+		slog.Error("encoding response: %w", err)
+		http.Error(w, "Encoding response", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func getRefreshTokenFromRequest(r *http.Request) (string, error) {
+	cookies := r.Cookies()
+
+	var refreshToken string
+	for _, cookie := range cookies {
+		if cookie.Name == "refresh_token" {
+			refreshToken = cookie.Value
+			break
+		}
+	}
+
+	if refreshToken == "" {
+		return "", errs.RefreshTokenNotFound
+	}
+	return refreshToken, nil
+}
+
+func setRefreshTokenToCookie(w http.ResponseWriter, refreshToken string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		HttpOnly: true,
+		Path:     "/",
+		//Secure:   true,
+		SameSite: http.SameSiteNoneMode,
+	})
+}
+
+func encodeResponse(w http.ResponseWriter, response any) error {
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(w).Encode(response)
+	if err != nil {
+		return fmt.Errorf("encoding response: %w", err)
+	}
+	return nil
+}
+
+func (h *Handler) decodeHeaderIntoAccessTokenClaims(r *http.Request) (*logic.AccessTokenClaims, error) {
+	accessToken := r.Header.Get("Authorization")
+	if accessToken == "" {
+		return nil, fmt.Errorf("access token not found")
+	}
+	//todo anti [1]
+	atc, err := h.logic.AccessTokenClaimsFromAccessToken(strings.Split(accessToken, " ")[1])
+	if err != nil {
+		slog.Error("turn access token (string) to claims: %w", err)
+		return nil, fmt.Errorf("turn access token (string) to claims: %w", err)
+	}
+	return atc, nil
 }

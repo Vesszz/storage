@@ -3,6 +3,8 @@ package loader
 import (
 	"fmt"
 	"io"
+	"log/slog"
+	"main/internal/models"
 	"mime/multipart"
 	"os"
 )
@@ -16,11 +18,21 @@ type PageData struct {
 	FilesNames FileList
 }
 
-func (l *Loader) createFile(filename string) (*os.File, error) {
+func (l *Loader) createFile(filename string, file multipart.File) error {
 	//ext := filepath.Ext(filename)
 	//photosExt := [7]string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"}
 	//fileDirector := ""
-	return os.Create(l.fsCfg.Path + filename)
+	out, err := os.Create(l.fsCfg.Path + filename)
+	if err != nil {
+		return fmt.Errorf("creating file: %w", err)
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		return fmt.Errorf("saving file: %w", err)
+	}
+	return nil
 }
 
 func (l *Loader) Get(path string) (multipart.File, error) {
@@ -49,19 +61,20 @@ func (l *Loader) GetAll() (*FileList, error) {
 	return response, nil
 }
 
-func (l *Loader) Load(fileName string, file multipart.File) error {
-	out, err := l.createFile(fileName)
+// todo save with ok name not user's name
+func (l *Loader) SaveFile(fileModel models.File, file multipart.File) (*models.File, error) {
+	err := l.createFile(fileModel.Name, file)
 	if err != nil {
-		return fmt.Errorf("creating file: %w", err)
+		slog.Error("create file: %w", err)
+		return nil, fmt.Errorf("create file: %w", err)
 	}
-	defer out.Close()
-
-	_, err = io.Copy(out, file)
+	err = l.db.QueryRow("INSERT INTO files(user_id, time_created, name, times_viewed) VALUES ($1, $2, $3, $4) RETURNING id",
+		fileModel.UserID, fileModel.TimeCreated, fileModel.Name, fileModel.TimesViewed).Scan(&fileModel.ID)
 	if err != nil {
-		return fmt.Errorf("saving file: %w", err)
+		slog.Error("insert file: %w", err)
+		return nil, fmt.Errorf("insert file: %w", err)
 	}
-
-	return nil
+	return &fileModel, nil
 }
 
 func (l *Loader) IndexInfo() (PageData, error) {

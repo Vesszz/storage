@@ -24,6 +24,7 @@ func Run() error {
 	http.HandleFunc("/list", h.FileList)
 	http.HandleFunc("/signup", h.SignUp)
 	http.HandleFunc("/signin", h.SignIn)
+	http.HandleFunc("/refresh", h.RefreshTokens)
 	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.Server.Port), nil)
 	if err != nil {
 		return fmt.Errorf("listening and serving: %w", err)

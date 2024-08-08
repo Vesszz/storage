@@ -3,6 +3,7 @@ package logic
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"main/internal/config"
 	"main/internal/errs"
 	"main/internal/loader"
@@ -11,9 +12,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"time"
 )
-
-const saltLength = 8
 
 type Logic struct {
 	loader         *loader.Loader
@@ -45,10 +45,16 @@ func (l *Logic) Index() (loader.PageData, error) {
 	return indexInfo, nil
 }
 
-func (l *Logic) Upload(fileName string, file multipart.File) error {
-	err := l.loader.Load(fileName, file)
+func (l *Logic) Upload(fileName string, file multipart.File, atc *AccessTokenClaims) error {
+	_, err := l.loader.SaveFile(models.File{
+		UserID:      atc.ID,
+		TimeCreated: time.Now(),
+		Name:        fileName,
+		TimesViewed: 0,
+	}, file)
 	if err != nil {
-		return fmt.Errorf("loading file: %w", err)
+		slog.Error("uploading file: %w", err)
+		return fmt.Errorf("uploading file: %w", err)
 	}
 	return nil
 }
@@ -77,7 +83,7 @@ func (l *Logic) FileList() (*loader.FileList, error) {
 }
 
 func (l *Logic) Register(name string, password string, fingerprint string) (*UserTokens, error) {
-	user, err := l.loader.FindUser(name)
+	user, err := l.loader.GetUserByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("finding user: %w", err)
 	}
@@ -85,14 +91,13 @@ func (l *Logic) Register(name string, password string, fingerprint string) (*Use
 		return nil, errs.UserAlreadyExists
 	}
 
-	hashedPassword, err := secutils.HashPassword(password, saltLength)
+	hashedPassword, err := secutils.HashPassword(password)
 	if err != nil {
 		return nil, fmt.Errorf("hashing password: %w", err)
 	}
 	user, err = l.loader.CreateUser(models.User{
 		Name:     name,
-		Password: hashedPassword.Value,
-		Salt:     hashedPassword.Salt,
+		Password: hashedPassword,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("registration on db side: %w", err)
@@ -105,22 +110,44 @@ func (l *Logic) Register(name string, password string, fingerprint string) (*Use
 	return userTokens, nil
 }
 
-func (l *Logic) Login(name string, password string) (*UserTokens, error) {
-	user, err := l.loader.FindUser(name)
+func (l *Logic) Login(name string, password string, fingerprint string) (*UserTokens, error) {
+	user, err := l.loader.GetUserByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("finding user: %w", err)
 	}
 	if user == nil {
 		return nil, errs.UserNotExists
 	}
-	hashedPassword, err := secutils.HashPasswordBySalt(password, user.Salt)
+	hashedPassword, err := secutils.HashPassword(password)
 	if err != nil {
-		return nil, fmt.Errorf("hashing while logging: %w", err)
+		return nil, fmt.Errorf("hashing while signing in: %w", err)
 	}
-	if user.Password != hashedPassword {
+	if !secutils.CompareHashAndPassword(hashedPassword, password) {
 		return nil, errs.WrongPassword
 	}
+	userTokens, err := l.CreateTokens(user, fingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("creating tokens: %w", err)
+	}
+	return userTokens, nil
+}
 
-	//TODO return token
-	return nil, nil
+func (l *Logic) Refresh(refreshToken string, fingerprint string) (*UserTokens, error) {
+	rtm, err := l.loader.GetRefreshTokenByRefreshToken(refreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("get refresh token: %w", err)
+	}
+	err = l.CheckRefreshToken(*rtm, fingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("check refresh token: %w", err)
+	}
+	user, err := l.loader.GetUserByID(rtm.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	tokens, err := l.CreateTokens(user, fingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("create tokens: %w", err)
+	}
+	return tokens, nil
 }
