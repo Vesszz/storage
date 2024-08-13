@@ -43,7 +43,9 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
-	file, header, err := r.FormFile("file")
+	file, fileHeader, err := r.FormFile("file")
+	userFileName := r.Form.Get("name")
+	userFileDescription := r.Form.Get("description")
 
 	if err != nil {
 		//http.Redirect(w, r, r.Header.Get("Referer"), http.StatusFound)
@@ -57,7 +59,9 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed read access token", http.StatusBadRequest)
 		return
 	}
-	err = h.logic.Upload(header.Filename, file, atc)
+
+	err = h.logic.Upload(userFileName, fileHeader.Filename, userFileDescription, file, atc)
+
 	if err != nil {
 		//http.Redirect(w, r, r.Header.Get("Referer"), http.StatusFound)
 		slog.Error("failed to upload file: %w", err)
@@ -227,8 +231,14 @@ func (h *Handler) decodeHeaderIntoAccessTokenClaims(r *http.Request) (*logic.Acc
 	if accessToken == "" {
 		return nil, fmt.Errorf("access token not found")
 	}
-	//todo anti [1]
-	atc, err := h.logic.AccessTokenClaimsFromAccessToken(strings.Split(accessToken, " ")[1])
+	ats := strings.Split(accessToken, " ")
+	if len(ats) != 2 {
+		return nil, fmt.Errorf("authorization failed, bad access token")
+	}
+	if ats[0] != "Bearer" {
+		return nil, fmt.Errorf("authorization failed, bad access token")
+	}
+	atc, err := h.logic.AccessTokenClaimsFromAccessToken(ats[1])
 	if err != nil {
 		slog.Error("turn access token (string) to claims: %w", err)
 		return nil, fmt.Errorf("turn access token (string) to claims: %w", err)

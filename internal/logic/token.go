@@ -46,7 +46,7 @@ func (l *Logic) CreateTokens(user *models.User, fingerprint string) (*UserTokens
 	}
 
 	refreshToken := uuid.New()
-	err = l.loader.UpdateRefreshToken(models.RefreshToken{
+	err = l.dbLoader.UpdateRefreshToken(models.RefreshToken{
 		Key:         refreshToken,
 		UserID:      user.ID,
 		Fingerprint: fingerprint,
@@ -62,7 +62,6 @@ func (l *Logic) CreateTokens(user *models.User, fingerprint string) (*UserTokens
 }
 
 func (l *Logic) CreateAccessToken(user *models.User) (string, error) {
-	//todo access token fields
 	atc := AccessTokenClaims{
 		Name:      user.Name,
 		ExpiresAt: time.Now().Add(AccessTokenLifetime).Unix(),
@@ -78,24 +77,6 @@ func (l *Logic) CreateAccessToken(user *models.User) (string, error) {
 		return "", fmt.Errorf("signing token: %w", err)
 	}
 	return tokenString, nil
-}
-
-func (l *Logic) ValidAccessToken(accessToken string, user *models.User) (*AccessTokenClaims, error) {
-	atc, err := l.AccessTokenClaimsFromAccessToken(accessToken)
-	if err != nil {
-		return nil, errs.InvalidAccessToken
-	}
-	if atc.ExpiresAt < time.Now().Unix() {
-		return nil, errs.AccessTokenExpired
-	}
-	if atc.Name != user.Name {
-		return nil, errs.InvalidAccessToken
-	}
-	if atc.ID != user.ID {
-		return nil, errs.InvalidAccessToken
-	}
-
-	return atc, nil
 }
 
 func (l *Logic) CheckRefreshToken(rtm models.RefreshToken, fingerprint string) error {
@@ -118,7 +99,9 @@ func (l *Logic) AccessTokenClaimsFromAccessToken(accessToken string) (*AccessTok
 	if err != nil {
 		return nil, fmt.Errorf("token parsing failed: %w", err)
 	}
-
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid access token")
+	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
 		return nil, errs.InvalidAccessToken

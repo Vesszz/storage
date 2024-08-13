@@ -1,4 +1,4 @@
-package loader
+package fileloader
 
 import (
 	"fmt"
@@ -18,10 +18,7 @@ type PageData struct {
 	FilesNames FileList
 }
 
-func (l *Loader) createFile(filename string, file multipart.File) error {
-	//ext := filepath.Ext(filename)
-	//photosExt := [7]string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"}
-	//fileDirector := ""
+func (l *FileLoader) createFile(filename string, file multipart.File) error {
 	out, err := os.Create(l.fsCfg.Path + filename)
 	if err != nil {
 		return fmt.Errorf("creating file: %w", err)
@@ -35,7 +32,7 @@ func (l *Loader) createFile(filename string, file multipart.File) error {
 	return nil
 }
 
-func (l *Loader) Get(path string) (multipart.File, error) {
+func (l *FileLoader) GetByPath(path string) (multipart.File, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("no file found: %w", err)
@@ -43,7 +40,7 @@ func (l *Loader) Get(path string) (multipart.File, error) {
 	return file, nil
 }
 
-func (l *Loader) GetAll() (*FileList, error) {
+func (l *FileLoader) GetAll() (*FileList, error) {
 	files, err := os.ReadDir(l.fsCfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("reading uploads dir: %w", err)
@@ -61,23 +58,16 @@ func (l *Loader) GetAll() (*FileList, error) {
 	return response, nil
 }
 
-// todo save with ok name not user's name
-func (l *Loader) SaveFile(fileModel models.File, file multipart.File) (*models.File, error) {
-	err := l.createFile(fileModel.Name, file)
+func (l *FileLoader) SaveFile(fileModel models.File, file multipart.File) (*models.File, error) {
+	err := l.createFile(fileModel.Path, file)
 	if err != nil {
 		slog.Error("create file: %w", err)
 		return nil, fmt.Errorf("create file: %w", err)
 	}
-	err = l.db.QueryRow("INSERT INTO files(user_id, time_created, name, times_viewed) VALUES ($1, $2, $3, $4) RETURNING id",
-		fileModel.UserID, fileModel.TimeCreated, fileModel.Name, fileModel.TimesViewed).Scan(&fileModel.ID)
-	if err != nil {
-		slog.Error("insert file: %w", err)
-		return nil, fmt.Errorf("insert file: %w", err)
-	}
 	return &fileModel, nil
 }
 
-func (l *Loader) IndexInfo() (PageData, error) {
+func (l *FileLoader) IndexInfo() (PageData, error) {
 	fileNames, err := l.GetAll()
 	if err != nil {
 		return PageData{}, fmt.Errorf("getting all files: %w", err)

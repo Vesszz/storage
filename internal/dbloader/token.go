@@ -1,4 +1,4 @@
-package loader
+package dbloader
 
 import (
 	"database/sql"
@@ -8,7 +8,7 @@ import (
 	"main/internal/models"
 )
 
-func (l *Loader) UpdateRefreshToken(refreshToken models.RefreshToken) error {
+func (l *DBLoader) UpdateRefreshToken(refreshToken models.RefreshToken) error {
 	query := `
 		INSERT INTO refresh_tokens(user_id, fingerprint, key, expires_at) 
 		VALUES ($1, $2, $3, $4) 
@@ -24,7 +24,7 @@ func (l *Loader) UpdateRefreshToken(refreshToken models.RefreshToken) error {
 	return nil
 }
 
-func (l *Loader) GetRefreshToken(userID int64) (*models.RefreshToken, error) {
+func (l *DBLoader) GetRefreshToken(userID int64) (*models.RefreshToken, error) {
 	var refreshToken models.RefreshToken
 	err := l.db.QueryRow("SELECT user_id, fingerprint, key, expires_at FROM refresh_tokens WHERE user_id=$1", userID).Scan(&refreshToken.UserID, &refreshToken.Fingerprint, &refreshToken.Key, &refreshToken.ExpiresAt)
 	if err != nil {
@@ -37,7 +37,7 @@ func (l *Loader) GetRefreshToken(userID int64) (*models.RefreshToken, error) {
 	return &refreshToken, nil
 }
 
-func (l *Loader) GetRefreshTokenByRefreshToken(refreshToken string) (*models.RefreshToken, error) {
+func (l *DBLoader) GetRefreshTokenModelByRefreshToken(refreshToken string) (*models.RefreshToken, error) {
 	var refreshTokenModel models.RefreshToken
 	err := l.db.QueryRow("SELECT user_id, fingerprint, key, expires_at FROM refresh_tokens WHERE key=$1", refreshToken).
 		Scan(&refreshTokenModel.UserID, &refreshTokenModel.Fingerprint, &refreshTokenModel.Key, &refreshTokenModel.ExpiresAt)

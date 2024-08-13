@@ -8,8 +8,8 @@ import (
 	"net/http"
 )
 
-func Run() error {
-	cfg, err := config.Load("./configs/config.yaml")
+func Run(configPath string) error {
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}

@@ -1,9 +1,15 @@
 package main
 
-import "main/internal/app"
+import (
+	"flag"
+	"main/internal/app"
+)
+
+var configPath = flag.String("config", "", "a path to config")
 
 func main() {
-	err := app.Run()
+	flag.Parse()
+	err := app.Run(*configPath)
 	if err != nil {
 		panic(err)
 	}
