@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
+	"time"
 )
 
 type Config struct {
 	Database    DatabaseConfig    `yaml:"database"`
 	FileStorage FileStorageConfig `yaml:"file_storage"`
 	Server      ServerConfig      `yaml:"server"`
+	Logger      LoggerConfig      `yaml:"logger"`
 }
 
 type DatabaseConfig struct {
@@ -27,6 +29,20 @@ type FileStorageConfig struct {
 
 type ServerConfig struct {
 	Port int `yaml:"port"`
+}
+
+type LoggerConfig struct {
+	Level string            `yaml:"level"`
+	File  *FileLoggerConfig `yaml:"file"`
+}
+
+type FileLoggerConfig struct {
+	Filename   string        `yaml:"filename"`
+	MaxSize    int64         `yaml:"max_size"`
+	MaxAge     time.Duration `yaml:"max_age"`
+	MaxBackups int           `yaml:"max_backups"`
+	LocalTime  bool          `yaml:"localtime"`
+	Compress   bool          `yaml:"compress"`
 }
 
 func Load(filename string) (*Config, error) {

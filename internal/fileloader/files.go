@@ -2,8 +2,8 @@ package fileloader
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"io"
-	"log/slog"
 	"main/internal/models"
 	"mime/multipart"
 	"os"
@@ -61,7 +61,7 @@ func (l *FileLoader) GetAll() (*FileList, error) {
 func (l *FileLoader) SaveFile(fileModel models.File, file multipart.File) (*models.File, error) {
 	err := l.createFile(fileModel.Path, file)
 	if err != nil {
-		slog.Error("create file: %w", err)
+		zap.S().Errorf("create file: %v", err)
 		return nil, fmt.Errorf("create file: %w", err)
 	}
 	return &fileModel, nil

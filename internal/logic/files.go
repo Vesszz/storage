@@ -3,7 +3,6 @@ package logic
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"log/slog"
 	"main/internal/fileloader"
 	"main/internal/models"
 	"mime/multipart"
@@ -21,7 +20,7 @@ func (l *Logic) Index() (fileloader.PageData, error) {
 
 func (l *Logic) Upload(userFileName string, fileName string, fileDescription string, file multipart.File, atc *AccessTokenClaims) error {
 	key := uuid.New()
-	_, err := l.fileLoader.SaveFile(models.File{
+	fileModel := models.File{
 		UserID:      atc.ID,
 		Key:         key,
 		Path:        key.String() + fileName,
@@ -29,10 +28,14 @@ func (l *Logic) Upload(userFileName string, fileName string, fileDescription str
 		Name:        userFileName,
 		Description: fileDescription,
 		TimesViewed: 0,
-	}, file)
+	}
+	_, err := l.fileLoader.SaveFile(fileModel, file)
 	if err != nil {
-		slog.Error("uploading file: %w", err)
 		return fmt.Errorf("uploading file: %w", err)
+	}
+	_, err = l.dbLoader.InsertFile(&fileModel)
+	if err != nil {
+		return fmt.Errorf("inserting file: %w", err)
 	}
 	return nil
 }

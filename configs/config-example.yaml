@@ -11,3 +11,13 @@ file_storage:
 
 server:
   port: 8080
+
+logger:
+  level: debug
+  file:
+    filename: "./logs/dev.log"
+    max_size: 1000000
+    max_age: 720h
+    max_backups: 5
+    localtime: true
+    compress: true

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"html/template"
-	"log/slog"
 	"main/internal/errs"
 	"main/internal/logic"
 	"net/http"
@@ -55,7 +55,6 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	atc, err := h.decodeHeaderIntoAccessTokenClaims(r)
 	if err != nil {
-		slog.Error("failed read access token: %w", err)
 		http.Error(w, "Failed read access token", http.StatusBadRequest)
 		return
 	}
@@ -64,7 +63,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		//http.Redirect(w, r, r.Header.Get("Referer"), http.StatusFound)
-		slog.Error("failed to upload file: %w", err)
+		zap.S().Errorf("failed to upload file: %v", err)
 		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
 	}
@@ -98,7 +97,7 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 	var singUpReq SignUpRequest
 	err := json.NewDecoder(r.Body).Decode(&singUpReq)
 	if err != nil {
-		slog.Error(fmt.Errorf("decoding json: %w", err).Error())
+		zap.S().Errorf("decoding json: %v", err)
 		http.Error(w, "Decoding json", http.StatusBadRequest)
 		return
 	}
@@ -109,7 +108,7 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "This name is taken", http.StatusBadRequest)
 			return
 		}
-		slog.Error(fmt.Errorf("managing reg: %w", err).Error())
+		zap.S().Errorf("managing reg: %v", err)
 		http.Error(w, "Managing registration", http.StatusInternalServerError)
 		return
 	}
@@ -118,7 +117,7 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 	response := SignUpResponse{AccessToken: tokens.AccessToken}
 	err = encodeResponse(w, response)
 	if err != nil {
-		slog.Error("encoding response: %w", err)
+		zap.S().Errorf("encoding response: %v", err)
 		http.Error(w, "Encoding response", http.StatusInternalServerError)
 		return
 	}
@@ -139,7 +138,7 @@ func (h *Handler) SignIn(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Wrong password", http.StatusBadRequest)
 			return
 		}
-		slog.Error(fmt.Errorf("login: %w", err).Error())
+		zap.S().Errorf("login: %v", err)
 		http.Error(w, "Signing in", http.StatusInternalServerError)
 		return
 	}
@@ -148,7 +147,7 @@ func (h *Handler) SignIn(w http.ResponseWriter, r *http.Request) {
 	response := SignInResponse{AccessToken: tokens.AccessToken}
 	err = encodeResponse(w, response)
 	if err != nil {
-		slog.Error("encoding response: %w", err)
+		zap.S().Errorf("encoding response: %v", err)
 		http.Error(w, "Encoding response", http.StatusInternalServerError)
 		return
 	}
@@ -168,7 +167,7 @@ func (h *Handler) RefreshTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
-		slog.Error("Get Refresh token from request: %w", err)
+		zap.S().Errorf("Get Refresh token from request: %v", err)
 		http.Error(w, "Get Refresh token from request", http.StatusInternalServerError)
 		return
 	}
@@ -182,7 +181,7 @@ func (h *Handler) RefreshTokens(w http.ResponseWriter, r *http.Request) {
 	response := RefreshResponse{AccessToken: tokens.AccessToken}
 	err = encodeResponse(w, response)
 	if err != nil {
-		slog.Error("encoding response: %w", err)
+		zap.S().Errorf("encoding response: %v", err)
 		http.Error(w, "Encoding response", http.StatusInternalServerError)
 		return
 	}
@@ -240,7 +239,7 @@ func (h *Handler) decodeHeaderIntoAccessTokenClaims(r *http.Request) (*logic.Acc
 	}
 	atc, err := h.logic.AccessTokenClaimsFromAccessToken(ats[1])
 	if err != nil {
-		slog.Error("turn access token (string) to claims: %w", err)
+		zap.S().Errorf("turn access token (string) to claims: %v", err)
 		return nil, fmt.Errorf("turn access token (string) to claims: %w", err)
 	}
 	return atc, nil
