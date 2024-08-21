@@ -19,6 +19,7 @@ func (l *DBLoader) InsertFile(fileModel *models.File) (*models.File, error) {
 func (l *DBLoader) DeleteFile(fileID int) error {
 	_, err := l.db.Exec("DELETE FROM files WHERE id = $1", fileID)
 	if err != nil {
+		zap.S().Errorf("delete file: %v", err)
 		return fmt.Errorf("deleting file: %w", err)
 	}
 	return nil

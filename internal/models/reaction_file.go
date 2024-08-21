@@ -1,6 +1,7 @@
 package models
 
-type Like struct {
+type ReactionFile struct {
 	UserID int
 	FileID int
+	TypeID int
 }
